@@ -1,0 +1,64 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<mule xmlns:salesforce-analytics="http://www.mulesoft.org/schema/mule/salesforce-analytics" xmlns:ee="http://www.mulesoft.org/schema/mule/ee/core"
+	xmlns:salesforce="http://www.mulesoft.org/schema/mule/salesforce"
+	xmlns="http://www.mulesoft.org/schema/mule/core" xmlns:doc="http://www.mulesoft.org/schema/mule/documentation" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd
+http://www.mulesoft.org/schema/mule/salesforce http://www.mulesoft.org/schema/mule/salesforce/current/mule-salesforce.xsd
+http://www.mulesoft.org/schema/mule/ee/core http://www.mulesoft.org/schema/mule/ee/core/current/mule-ee.xsd
+http://www.mulesoft.org/schema/mule/salesforce-analytics http://www.mulesoft.org/schema/mule/salesforce-analytics/current/mule-salesforce-analytics.xsd">
+	<configuration-properties doc:name="Configuration properties" doc:id="3b8d0187-baae-48ae-b0c8-873d77d7b542" file="mule-properties.yaml" />
+	
+	<salesforce:sfdc-config name="Salesforce_Config" doc:name="Salesforce Config" doc:id="d9179f8d-b364-447c-837a-d94e7cf54f75" >
+		<salesforce:basic-connection username="${salesforce.username}" password="${salesforce.password}" securityToken="${salesforce.token}" />
+	</salesforce:sfdc-config>
+	
+	<salesforce-analytics:salesforce-analytics-config name="Salesforce_Analytics_Config" doc:name="Salesforce Analytics Config" doc:id="94c239d2-85ee-4eb1-9724-f7c2abfca256" >
+		<salesforce-analytics:basic-connection username="${salesforce.username}" password="${salesforce.password}" securityToken="${salesforce.token}" />
+	</salesforce-analytics:salesforce-analytics-config>
+	<flow name="sfdc-cdc-to-crma-example-mule4Flow" doc:id="ecb43a29-7f0a-4e2a-922c-5294057ff749" >
+		<salesforce:replay-channel-listener doc:name="Replay channel listener" doc:id="80bb0053-0b83-4e3a-aa67-2564dc8c589d" config-ref="Salesforce_Config" streamingChannel="/data/ContactChangeEvent" replayOption="FROM_LAST_REPLAY_ID"/>
+		<ee:transform doc:name="Transform Message" doc:id="4cf23c31-bdbd-4e3d-9633-42afb8224b8a" >
+			<ee:message >
+				<ee:set-payload ><![CDATA[%dw 2.0
+output application/java
+---
+{
+	fields: ["ID", "Name", "Email","FirstName","LastName","HomePhone","MailingCity","MailingCountry","MailingPostalCode"],
+	ids: payload.data.payload.ChangeEventHeader.recordIds
+} as Object {
+	class : "org.mule.extension.salesforce.api.core.RetrieveRequest"
+}]]></ee:set-payload>
+			</ee:message>
+		</ee:transform>
+		<salesforce:retrieve doc:name="Retrieve" doc:id="5092d381-8bea-4ac6-9578-ac6504bcb3ff" config-ref="Salesforce_Config" type="Contact"/>
+		<logger level="INFO" doc:name="Logger" doc:id="fad3eaf7-f336-4562-96be-932b18f2bf4b" message="#[%dw 2.0&#10;output application/json&#10;---&#10;payload]"/>
+		<ee:transform doc:name="Transform Message" doc:id="43e630d0-82f9-4a81-b58d-653f1795b15d" >
+			<ee:message >
+				<ee:set-payload ><![CDATA[%dw 2.0
+output application/java
+---
+payload map {
+	"Email": $.Email,
+    "HomePhone": $.HomePhone,
+    "FirstName": $.FirstName,
+    "MailingPostalCode": $.MailingPostalCode ,
+    "MailingCountry": $.MailingCountry,
+    "MailingCity": $.MailingCity,
+    "Id": $.Id ,
+    "LastName": $.LastName,
+    "Name": $.Name,
+ 
+}]]></ee:set-payload>
+			</ee:message>
+		</ee:transform>
+		<salesforce-analytics:upload-external-data-into-new-data-set-and-start-processing doc:name="Upload external data into new data set and start processing" doc:id="302762d4-aca4-4521-b94b-102f567acaaa" config-ref="Salesforce_Analytics_Config" type="/Users/djuang/Workspaces/seven-fourteen/sfdc-cdc-to-crma-example-mule4/src/main/resources/results.json" operation="APPEND" description="Contacts CDC" label="Label" dataSetName="CDCContacts" edgemartContainer="CDC_to_CRMA" notificationSent="ALWAYS" notificationEmail="djuang@salesforce.com"/>
+		<ee:transform doc:name="Transform Message" doc:id="9fd7ec95-0bc4-407c-8725-a5f5e6798b27" >
+			<ee:message >
+				<ee:set-payload ><![CDATA[%dw 2.0
+output application/json
+---
+payload]]></ee:set-payload>
+			</ee:message>
+		</ee:transform>
+	</flow>
+</mule>
